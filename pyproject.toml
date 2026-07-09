@@ -20,6 +20,10 @@ dependencies = [
     # PAM stack — on arecibo that's SSSD → Kerberos, i.e. the same chain
     # SSHd uses for password logins. No C build deps.
     "python-pam>=2.0",
+    # python-pam 2.x imports `six` at module load but does not always
+    # declare it in its own metadata (upstream packaging bug). Pin it
+    # explicitly so a fresh venv doesn't 500 on the first login.
+    "six>=1.16",
 ]
 
 [project.optional-dependencies]

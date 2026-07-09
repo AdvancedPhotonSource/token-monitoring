@@ -267,13 +267,16 @@ def authenticate(username: str, password: str) -> bool:
 
     # Deferred import so the module stays importable in test contexts
     # that don't install python-pam. In production it's a required
-    # dep; a missing install here surfaces as a loud 500 on first
-    # login rather than a silent import error at boot.
+    # dep — a broken install (e.g. python-pam without its `six`
+    # transitive) is logged loudly and rejects the login as if the
+    # password were wrong. That's the same wire response any other
+    # failed auth gives, so we don't leak install state to the user,
+    # and the ops signal is in the screen log.
     try:
         import pam as pam_mod  # noqa: WPS433
     except ImportError as exc:  # pragma: no cover — install error path
-        _log.error("python-pam not installed; cannot authenticate: %s", exc)
-        raise RuntimeError("python-pam is required for PAM authentication") from exc
+        _log.error("python-pam import failed; check `pip install six python-pam`: %s", exc)
+        return False
 
     service = _pam_service()
     try:
