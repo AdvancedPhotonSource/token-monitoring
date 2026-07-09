@@ -7,6 +7,7 @@ authenticated / unauthenticated branches.
 """
 from __future__ import annotations
 
+import secrets
 import time
 from pathlib import Path
 
@@ -18,10 +19,11 @@ from token_monitoring.auth_pam import SessionRecord, SessionStore, require_user
 
 def test_session_create_get_delete(tmp_path: Path) -> None:
     store = SessionStore(tmp_path / "s.sqlite")
-    sid = store.create(username="haskels", display_name="haskels")
+    fake_user = f"user-{secrets.token_hex(4)}"
+    sid = store.create(username=fake_user, display_name=fake_user)
     rec = store.get(sid)
     assert rec is not None
-    assert rec.username == "haskels"
+    assert rec.username == fake_user
 
     store.delete(sid)
     assert store.get(sid) is None
@@ -30,7 +32,8 @@ def test_session_create_get_delete(tmp_path: Path) -> None:
 
 def test_session_expiry_purges(tmp_path: Path, monkeypatch) -> None:
     store = SessionStore(tmp_path / "s.sqlite")
-    sid = store.create(username="u", display_name="u")
+    sid = store.create(username=f"user-{secrets.token_hex(4)}",
+                       display_name="u")
 
     # Force expiry by rewinding the row's expires_at.
     with store._lock:

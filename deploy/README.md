@@ -11,7 +11,7 @@ terminated by uvicorn using the shared InCommon cert at
 # On arecibo, as haskels
 mkdir -p /home/beams/HASKELS/token_monitoring
 cd /home/beams/HASKELS/token_monitoring
-git clone https://github.com/AdvancedPhotonSource/token-monitoring.git .
+git clone git@github.com:AdvancedPhotonSource/token-monitoring.git .
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -e .
@@ -39,6 +39,18 @@ Verify:
 
 ```bash
 curl -k https://arecibo.xray.aps.anl.gov:9004/health
+```
+
+## Staged smoke on port 9005
+
+For any first deploy or risky change, launch on the unused 9005 first so
+9004 keeps serving:
+
+```bash
+PORT=9005 screen -dmS token-monitoring-stg bash deploy/serve_with_restart.sh
+curl -k https://arecibo.xray.aps.anl.gov:9005/health
+# Point one VS Code plugin at :9005, drive one chat, confirm the row lands.
+screen -X -S token-monitoring-stg quit
 ```
 
 ## Update flow

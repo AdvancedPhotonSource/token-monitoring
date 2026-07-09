@@ -329,21 +329,25 @@ function app() {
     async checkAuth() {
       try {
         const r = await fetch('/auth/whoami', { credentials: 'include' });
-        if (!r.ok) { this.apiConnected = true; this.needsLogin = true; return; }
-        const j = await r.json();
         this.apiConnected = true;
+
+        // 404 → PAM routes aren't mounted (TM_PAM_ENABLED unset). Probe the
+        // real API to see whether it's open or gated some other way.
+        if (r.status === 404) {
+          const ping = await fetch('/api/overview?days=1', { credentials: 'include' });
+          if (ping.status === 401) { this.needsLogin = true; }
+          else { this.currentUser = '(open)'; this.needsLogin = false; }
+          return;
+        }
+
+        if (!r.ok) { this.needsLogin = true; return; }
+        const j = await r.json();
         if (j.authenticated) {
           this.currentUser = j.display_name || j.username;
           this.needsLogin = false;
         } else {
           this.currentUser = null;
-          // PAM may be disabled — try to fetch a real endpoint to decide.
-          const ping = await fetch('/api/overview?days=1', { credentials: 'include' });
-          if (ping.status === 401) { this.needsLogin = true; }
-          else {
-            this.currentUser = '(open)';
-            this.needsLogin = false;
-          }
+          this.needsLogin = true;
         }
       } catch (e) {
         this.apiConnected = false;
