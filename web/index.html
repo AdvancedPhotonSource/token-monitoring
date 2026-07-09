@@ -117,17 +117,28 @@
               <option value="90">90d</option><option value="365">1y</option>
             </select>
           </div>
-          <canvas id="chartDaily" height="140"></canvas>
+          <!-- Chart.js sizes canvas to its parent; parent MUST have an
+               explicit height and position:relative, otherwise
+               responsive+maintainAspectRatio:false creates a resize
+               feedback loop that grows the card until the tab is
+               unusable. Do not drop the wrapper. -->
+          <div class="relative h-64">
+            <canvas id="chartDaily"></canvas>
+          </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <h3 class="text-sm font-medium text-slate-300 mb-3">Top users</h3>
-          <canvas id="chartUsers" height="140"></canvas>
+          <div class="relative h-64">
+            <canvas id="chartUsers"></canvas>
+          </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <h3 class="text-sm font-medium text-slate-300 mb-3">Top models</h3>
-          <canvas id="chartModels" height="140"></canvas>
+          <div class="relative h-64">
+            <canvas id="chartModels"></canvas>
+          </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
