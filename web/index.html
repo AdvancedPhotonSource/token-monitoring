@@ -122,21 +122,21 @@
                responsive+maintainAspectRatio:false creates a resize
                feedback loop that grows the card until the tab is
                unusable. Do not drop the wrapper. -->
-          <div class="relative h-64">
+          <div class="relative w-full" style="height:16rem">
             <canvas id="chartDaily"></canvas>
           </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <h3 class="text-sm font-medium text-slate-300 mb-3">Top users</h3>
-          <div class="relative h-64">
+          <div class="relative w-full" style="height:16rem">
             <canvas id="chartUsers"></canvas>
           </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <h3 class="text-sm font-medium text-slate-300 mb-3">Top models</h3>
-          <div class="relative h-64">
+          <div class="relative w-full" style="height:16rem">
             <canvas id="chartModels"></canvas>
           </div>
         </div>
@@ -144,11 +144,16 @@
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <h3 class="text-sm font-medium text-slate-300 mb-3">This month</h3>
           <dl class="grid grid-cols-2 gap-y-2 text-sm">
+            <!-- display:contents lets Alpine iterate a single-element
+                 root while dt/dd still participate in the parent grid.
+                 A nested plain <template> here (previous version) is
+                 inert HTML — Alpine never instantiates it and the
+                 whole card renders empty. -->
             <template x-for="[k,v] in monthEntries()" :key="k">
-              <template>
+              <div class="contents" style="display:contents">
                 <dt class="text-slate-500" x-text="k"></dt>
                 <dd class="text-right mono text-slate-200" x-text="v"></dd>
-              </template>
+              </div>
             </template>
           </dl>
           <p class="text-xs text-slate-600 mt-3">
@@ -547,8 +552,14 @@ function app() {
     _chart(id, cfg) {
       const el = document.getElementById(id);
       if (!el) return;
-      if (this._charts[id]) this._charts[id].destroy();
-      this._charts[id] = new Chart(el, cfg);
+      try {
+        if (this._charts[id]) this._charts[id].destroy();
+        this._charts[id] = new Chart(el, cfg);
+      } catch (err) {
+        // One bad chart shouldn't blank the other two. Log so a
+        // future console-open reveals the real cause; keep going.
+        console.error(`chart ${id} failed:`, err);
+      }
     },
   };
 }
