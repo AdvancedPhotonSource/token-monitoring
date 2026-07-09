@@ -1,5 +1,7 @@
 # token-monitoring
 
+THIS REPO IS INACTIVE AND NOT CONNECTED TO ANY DASHBOARD. 
+
 Anthropic-Messages-API proxy that forwards to Argonne's Argo LLM gateway,
 records per-user token usage in SQLite, and exposes a dashboard on
 `arecibo:9014`.
