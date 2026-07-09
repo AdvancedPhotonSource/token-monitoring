@@ -550,14 +550,27 @@ function app() {
     },
 
     _chart(id, cfg) {
-      const el = document.getElementById(id);
-      if (!el) return;
+      // Full teardown-and-rebuild each render. Reason: Alpine's
+      // reactive DOM diff can replace the <canvas> node between
+      // Chart.js's constructor and its first ResizeObserver tick,
+      // leaving Chart.js with a stale reference — the symptom is
+      // "TypeError: null is not an object (evaluating 't.getContext')"
+      // and blank canvases. Recreating the canvas element ourselves
+      // means Chart.js is the only thing that ever holds a reference.
+      let el = document.getElementById(id);
+      if (!el) { console.warn(`chart ${id}: canvas not found`); return; }
+      const parent = el.parentNode;
+      if (this._charts[id]) {
+        try { this._charts[id].destroy(); } catch {}
+        this._charts[id] = null;
+      }
+      parent.removeChild(el);
+      const fresh = document.createElement('canvas');
+      fresh.id = id;
+      parent.appendChild(fresh);
       try {
-        if (this._charts[id]) this._charts[id].destroy();
-        this._charts[id] = new Chart(el, cfg);
+        this._charts[id] = new Chart(fresh, cfg);
       } catch (err) {
-        // One bad chart shouldn't blank the other two. Log so a
-        // future console-open reveals the real cause; keep going.
         console.error(`chart ${id} failed:`, err);
       }
     },
