@@ -71,6 +71,9 @@ def test_forwards_and_records_usage(app_with_mock_upstream):
     assert captured["url"].endswith("/v1/messages")
     assert captured["headers"].get("x-api-key") == "haskels"
     assert json.loads(captured["body"])["model"] == "claude-sonnet-4-6"
+    # We must force identity encoding upstream so the SSE tee sees text,
+    # not gzipped bytes — httpx would otherwise inject a compressed default.
+    assert captured["headers"].get("accept-encoding") == "identity"
 
     # And exactly one row landed in SQLite with the right numbers.
     from token_monitoring import db as db_mod

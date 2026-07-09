@@ -11,7 +11,7 @@ terminated by uvicorn using the shared InCommon cert at
 # On arecibo, as haskels
 mkdir -p /home/beams/HASKELS/token_monitoring
 cd /home/beams/HASKELS/token_monitoring
-git clone git@github.com:AdvancedPhotonSource/token-monitoring.git .
+git clone https://github.com/AdvancedPhotonSource/token-monitoring.git .
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -e .

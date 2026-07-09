@@ -289,6 +289,12 @@ def build_router() -> APIRouter:
             k: v for k, v in request.headers.items()
             if k.lower() not in _HOP_BY_HOP
         }
+        # Force identity encoding upstream. httpx would otherwise inject
+        # its own `Accept-Encoding: gzip,...` default, Argo would return a
+        # gzipped body, and our SSE tee (which sees raw bytes) would parse
+        # garbage — plus the client would receive gzip bytes with the
+        # content-encoding header stripped by us.
+        fwd_headers["accept-encoding"] = "identity"
 
         user_hash = _hash_key(request)
         ts_utc = _iso_now()
