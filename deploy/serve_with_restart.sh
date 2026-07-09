@@ -6,9 +6,10 @@
 #
 # Never uses the same screen name, port, or state dir as JMD (9002) /
 # XEOL (9003) / CAI (9001) / Califone (9008) — they cohabit on arecibo.
+# Ports 9000-9013 are all taken by other users on arecibo; we sit on 9014.
 #
 # Override defaults with environment variables:
-#   PORT=9004 HOST=0.0.0.0 bash deploy/serve_with_restart.sh
+#   PORT=9014 HOST=0.0.0.0 bash deploy/serve_with_restart.sh
 #
 # Optional per-deploy env file (arecibo-side, NEVER committed):
 #   ~/.token_monitoring/env
@@ -22,7 +23,7 @@
 
 set -o pipefail
 
-PORT=${PORT:-9004}
+PORT=${PORT:-9014}
 HOST=${HOST:-0.0.0.0}
 LOG_LEVEL=${LOG_LEVEL:-info}
 

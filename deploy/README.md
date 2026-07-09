@@ -38,18 +38,18 @@ screen -dmS token-monitoring bash deploy/serve_with_restart.sh
 Verify:
 
 ```bash
-curl -k https://arecibo.xray.aps.anl.gov:9004/health
+curl -k https://arecibo.xray.aps.anl.gov:9014/health
 ```
 
-## Staged smoke on port 9005
+## Staged smoke on a second port
 
-For any first deploy or risky change, launch on the unused 9005 first so
-9004 keeps serving:
+For a risky change you want to try without stopping the production
+service, spin a second copy on port 9015 (also free):
 
 ```bash
-PORT=9005 screen -dmS token-monitoring-stg bash deploy/serve_with_restart.sh
-curl -k https://arecibo.xray.aps.anl.gov:9005/health
-# Point one VS Code plugin at :9005, drive one chat, confirm the row lands.
+PORT=9015 screen -dmS token-monitoring-stg bash deploy/serve_with_restart.sh
+curl -k https://arecibo.xray.aps.anl.gov:9015/health
+# Point one VS Code plugin at :9015, drive one chat, confirm the row lands.
 screen -X -S token-monitoring-stg quit
 ```
 
@@ -72,13 +72,16 @@ screen -dmS token-monitoring bash deploy/serve_with_restart.sh
 
 ## Ports
 
+Ports 9000–9013 on arecibo are all in use by other users' services (as
+of 2026-07-09). We took 9014 instead of the originally planned 9004.
+
 | Service    | Port | Notes                                        |
 |------------|------|----------------------------------------------|
 | CAI        | 9001 | Django, genesis_proxy TLS                    |
 | JMD        | 9002 | uvicorn + PAM                                |
 | XEOL       | 9003 | uvicorn                                      |
-| **token-monitoring** | **9004** | **this service**                             |
 | Califone   | 9008 | uvicorn + PAM                                |
+| **token-monitoring** | **9014** | **this service** (9004 was taken) |
 | argo_relay | 7000 | JMD's stdlib Argo forward-proxy. **DO NOT clobber.** |
 
 ## Labeling user hashes

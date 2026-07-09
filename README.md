@@ -2,7 +2,7 @@
 
 Anthropic-Messages-API proxy that forwards to Argonne's Argo LLM gateway,
 records per-user token usage in SQLite, and exposes a dashboard on
-`arecibo:9004`.
+`arecibo:9014`.
 
 Built as a stopgap so VS Code plugin users (who don't get the token
 counts that Claude Code CLI users see) can see their own consumption
@@ -28,7 +28,7 @@ DB is standalone and portable.
 Whatever your plugin calls the Anthropic base URL setting, set it to:
 
 ```
-ANTHROPIC_BASE_URL=https://arecibo.xray.aps.anl.gov:9004
+ANTHROPIC_BASE_URL=https://arecibo.xray.aps.anl.gov:9014
 ANTHROPIC_API_KEY=<your ANL username>
 ```
 
@@ -42,7 +42,7 @@ separate adapter that isn't in scope for v1).
 
 ## Dashboard
 
-Open `https://arecibo.xray.aps.anl.gov:9004/` in a browser (any device
+Open `https://arecibo.xray.aps.anl.gov:9014/` in a browser (any device
 on the ANL network). Sign in with your ANL domain credentials.
 
 Tabs:
@@ -63,7 +63,7 @@ Run against a local mock upstream:
 ```bash
 TM_PAM_ENABLED=0 \
 TM_UPSTREAM_URL=https://apps.inside.anl.gov/argoapi \
-.venv/bin/token-monitoring serve --host 127.0.0.1 --port 9004
+.venv/bin/token-monitoring serve --host 127.0.0.1 --port 9014
 ```
 
 ## Deploy
@@ -93,6 +93,6 @@ tests/           pytest coverage for db, proxy (streaming + not), auth
 | CAI        | 9001 | Django internal website                            |
 | JMD        | 9002 | OCI job-management dashboard                       |
 | XEOL       | 9003 | Beamline XEOL Studio                               |
-| **token-monitoring** | **9004** | **this service**                                   |
+| **token-monitoring** | **9014** | **this service**                                   |
 | Califone   | 9008 | PBS + GPU node dashboard                           |
 | argo_relay | 7000 | JMD's stdlib Argo forward-proxy (byte-forwarder)   |

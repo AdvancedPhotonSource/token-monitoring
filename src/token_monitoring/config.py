@@ -47,9 +47,9 @@ def host() -> str:
 
 def port() -> int:
     try:
-        return int(os.environ.get("TM_PORT", "9004"))
+        return int(os.environ.get("TM_PORT", "9014"))
     except ValueError:
-        return 9004
+        return 9014
 
 
 def log_level() -> str:

@@ -57,12 +57,25 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_env() -> None:
-    """Load .env if present. Silent if python-dotenv isn't installed."""
+    """Load env files if present. Silent if python-dotenv isn't installed.
+
+    Explicit search order (no walk-up — a stray ~/.env with shell syntax
+    would trigger dotenv parse warnings that don't help anyone):
+      1. ~/.token_monitoring/env   (per-deploy secrets, matches serve_with_restart.sh)
+      2. ./.env                    (dev convenience)
+    """
     try:
         from dotenv import load_dotenv
-        load_dotenv()
     except ImportError:
-        pass
+        return
+    from pathlib import Path
+    candidates = [
+        Path.home() / ".token_monitoring" / "env",
+        Path.cwd() / ".env",
+    ]
+    for p in candidates:
+        if p.is_file():
+            load_dotenv(dotenv_path=p, override=False)
 
 
 def main(argv: list[str] | None = None) -> int:
