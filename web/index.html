@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token Monitoring — Argo</title>
+
+  <!-- Tailwind CSS (Play CDN — no build step) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Alpine.js -->
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    .mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-slate-200 antialiased"
+      x-data="app()" x-init="init()" x-cloak>
+
+  <!-- ═══════════════════════════════════════════════════════════ HEADER -->
+  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-700/60 px-6 py-3 flex items-center gap-3">
+    <div class="flex items-center gap-2.5 mr-2">
+      <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+              d="M3 12h4l3-8 4 16 3-8h4"/>
+      </svg>
+      <span class="font-semibold text-slate-100 tracking-tight">Token Monitoring</span>
+      <span class="text-xs text-slate-500 hidden sm:inline">Argo LLM usage</span>
+    </div>
+
+    <div class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+         :class="apiConnected ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-700/50'
+                              : 'bg-red-900/40 text-red-400 border border-red-700/50'">
+      <span class="w-1.5 h-1.5 rounded-full"
+            :class="apiConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'"></span>
+      <span x-text="apiConnected ? 'connected' : 'unreachable'"></span>
+    </div>
+
+    <nav class="flex items-center gap-1 ml-4">
+      <template x-for="t in ['overview','requests']" :key="t">
+        <button @click="tab = t; loadTab()"
+                class="px-3 py-1 text-sm rounded"
+                :class="tab === t ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'">
+          <span x-text="t.charAt(0).toUpperCase() + t.slice(1)"></span>
+        </button>
+      </template>
+      <button x-show="selectedUser" @click="tab = 'user'"
+              class="px-3 py-1 text-sm rounded"
+              :class="tab === 'user' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'">
+        User: <span class="mono" x-text="selectedUserLabel"></span>
+      </button>
+    </nav>
+
+    <div class="flex-1"></div>
+
+    <template x-if="currentUser">
+      <div class="flex items-center gap-3 text-xs text-slate-400">
+        <span><span class="text-slate-500">signed in:</span>
+          <span class="text-slate-200 mono ml-1" x-text="currentUser"></span></span>
+        <button @click="logout()" class="text-slate-500 hover:text-slate-300">sign out</button>
+      </div>
+    </template>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════ LOGIN -->
+  <div x-show="needsLogin" class="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center">
+    <form @submit.prevent="doLogin()"
+          class="bg-slate-900 border border-slate-700 rounded-lg p-6 w-80 space-y-3 shadow-xl">
+      <h2 class="text-lg font-semibold text-slate-100">Sign in</h2>
+      <p class="text-xs text-slate-500">ANL domain credentials (same as SSH to arecibo).</p>
+      <input x-model="loginForm.username" type="text" placeholder="username"
+             autocomplete="username"
+             class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+      <input x-model="loginForm.password" type="password" placeholder="password"
+             autocomplete="current-password"
+             class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+      <div x-show="loginError" class="text-xs text-red-400" x-text="loginError"></div>
+      <button type="submit" :disabled="loginBusy"
+              class="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white rounded px-3 py-2 text-sm font-medium">
+        <span x-show="!loginBusy">Sign in</span>
+        <span x-show="loginBusy">Signing in…</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ MAIN -->
+  <main class="max-w-7xl mx-auto px-6 py-6">
+
+    <!-- OVERVIEW -->
+    <section x-show="tab === 'overview'" class="space-y-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <template x-for="k in kpis" :key="k.label">
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+            <div class="text-xs text-slate-500 uppercase tracking-wide" x-text="k.label"></div>
+            <div class="text-2xl font-semibold text-slate-100 mt-1 mono" x-text="k.value"></div>
+            <div class="text-xs text-slate-500 mt-1" x-text="k.sub"></div>
+          </div>
+        </template>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-medium text-slate-300">Tokens per day (last <span x-text="days"></span>d)</h3>
+            <select x-model.number="days" @change="loadOverview()"
+                    class="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1">
+              <option value="7">7d</option><option value="30">30d</option>
+              <option value="90">90d</option><option value="365">1y</option>
+            </select>
+          </div>
+          <canvas id="chartDaily" height="140"></canvas>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+          <h3 class="text-sm font-medium text-slate-300 mb-3">Top users</h3>
+          <canvas id="chartUsers" height="140"></canvas>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+          <h3 class="text-sm font-medium text-slate-300 mb-3">Top models</h3>
+          <canvas id="chartModels" height="140"></canvas>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+          <h3 class="text-sm font-medium text-slate-300 mb-3">This month</h3>
+          <dl class="grid grid-cols-2 gap-y-2 text-sm">
+            <template x-for="[k,v] in monthEntries()" :key="k">
+              <template>
+                <dt class="text-slate-500" x-text="k"></dt>
+                <dd class="text-right mono text-slate-200" x-text="v"></dd>
+              </template>
+            </template>
+          </dl>
+          <p class="text-xs text-slate-600 mt-3">
+            since <span class="mono" x-text="overview.current_month?.since || ''"></span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- REQUESTS -->
+    <section x-show="tab === 'requests'" class="space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+        <div class="flex flex-wrap gap-3 items-end">
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">User</label>
+            <select x-model="reqFilters.user_hash" @change="loadRequests(true)"
+                    class="text-sm bg-slate-800 border border-slate-700 rounded px-2 py-1 min-w-40">
+              <option value="">all</option>
+              <template x-for="u in overview.top_users || []" :key="u.user_hash">
+                <option :value="u.user_hash" x-text="labelFor(u.user_hash)"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">Model</label>
+            <select x-model="reqFilters.model" @change="loadRequests(true)"
+                    class="text-sm bg-slate-800 border border-slate-700 rounded px-2 py-1 min-w-40">
+              <option value="">all</option>
+              <template x-for="m in overview.top_models || []" :key="m.model">
+                <option :value="m.model" x-text="m.model"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">Since (UTC)</label>
+            <input x-model="reqFilters.since" @change="loadRequests(true)"
+                   type="text" placeholder="2026-07-01"
+                   class="text-sm bg-slate-800 border border-slate-700 rounded px-2 py-1 mono w-32" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 block mb-1">Until (UTC)</label>
+            <input x-model="reqFilters.until" @change="loadRequests(true)"
+                   type="text" placeholder="2026-07-10"
+                   class="text-sm bg-slate-800 border border-slate-700 rounded px-2 py-1 mono w-32" />
+          </div>
+          <div class="flex-1"></div>
+          <div class="text-xs text-slate-500">
+            <span x-text="requests.total || 0"></span> rows
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-slate-500 uppercase tracking-wide bg-slate-900 border-b border-slate-800">
+            <tr>
+              <th class="text-left px-3 py-2">time</th>
+              <th class="text-left px-3 py-2">user</th>
+              <th class="text-left px-3 py-2">model</th>
+              <th class="text-right px-3 py-2">in</th>
+              <th class="text-right px-3 py-2">out</th>
+              <th class="text-right px-3 py-2">cache r/c</th>
+              <th class="text-right px-3 py-2">latency</th>
+              <th class="text-right px-3 py-2">status</th>
+              <th class="text-left px-3 py-2">stream</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in requests.rows || []" :key="r.id">
+              <tr class="border-b border-slate-800/60 hover:bg-slate-800/40">
+                <td class="px-3 py-1.5 mono text-slate-400" x-text="shortTs(r.ts_utc)"></td>
+                <td class="px-3 py-1.5">
+                  <button @click="openUser(r.user_hash)"
+                          class="mono text-emerald-400 hover:underline"
+                          x-text="labelFor(r.user_hash)"></button>
+                </td>
+                <td class="px-3 py-1.5 mono text-slate-300" x-text="r.model"></td>
+                <td class="px-3 py-1.5 text-right mono" x-text="fmt(r.input_tokens)"></td>
+                <td class="px-3 py-1.5 text-right mono" x-text="fmt(r.output_tokens)"></td>
+                <td class="px-3 py-1.5 text-right mono text-slate-500"
+                    x-text="cacheFmt(r.cache_read_tokens, r.cache_creation_tokens)"></td>
+                <td class="px-3 py-1.5 text-right mono text-slate-400"
+                    x-text="r.latency_ms != null ? r.latency_ms + 'ms' : '—'"></td>
+                <td class="px-3 py-1.5 text-right mono"
+                    :class="r.status_code >= 400 ? 'text-red-400' : 'text-slate-400'"
+                    x-text="r.status_code"></td>
+                <td class="px-3 py-1.5 text-slate-500" x-text="r.streamed ? 'sse' : ''"></td>
+              </tr>
+            </template>
+            <tr x-show="(requests.rows || []).length === 0">
+              <td colspan="9" class="text-center text-slate-500 py-6">no rows</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-slate-500">
+        <button @click="reqFilters.offset = Math.max(0, reqFilters.offset - reqFilters.limit); loadRequests()"
+                :disabled="reqFilters.offset === 0"
+                class="px-3 py-1 rounded bg-slate-800 disabled:opacity-40">← prev</button>
+        <span>
+          <span x-text="reqFilters.offset + 1"></span>–<span
+                x-text="Math.min(reqFilters.offset + (requests.rows || []).length, requests.total || 0)"></span>
+          of <span x-text="requests.total || 0"></span>
+        </span>
+        <button @click="reqFilters.offset += reqFilters.limit; loadRequests()"
+                :disabled="(reqFilters.offset + reqFilters.limit) >= (requests.total || 0)"
+                class="px-3 py-1 rounded bg-slate-800 disabled:opacity-40">next →</button>
+      </div>
+    </section>
+
+    <!-- USER DETAIL -->
+    <section x-show="tab === 'user'" class="space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+        <div class="text-xs text-slate-500">user</div>
+        <div class="text-lg mono text-slate-100" x-text="userDetail.display_name || ''"></div>
+        <div class="text-xs mono text-slate-600 mt-1" x-text="userDetail.user_hash || ''"></div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <template x-for="k in userKpis()" :key="k.label">
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+            <div class="text-xs text-slate-500 uppercase tracking-wide" x-text="k.label"></div>
+            <div class="text-2xl font-semibold text-slate-100 mt-1 mono" x-text="k.value"></div>
+          </div>
+        </template>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-slate-300 mb-3">Per-model breakdown</h3>
+        <table class="w-full text-xs">
+          <thead class="text-slate-500 uppercase">
+            <tr>
+              <th class="text-left px-2 py-1">model</th>
+              <th class="text-right px-2 py-1">requests</th>
+              <th class="text-right px-2 py-1">input</th>
+              <th class="text-right px-2 py-1">output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="m in userDetail.per_model || []" :key="m.model">
+              <tr class="border-b border-slate-800/60">
+                <td class="px-2 py-1 mono text-slate-300" x-text="m.model"></td>
+                <td class="px-2 py-1 text-right mono" x-text="fmt(m.n)"></td>
+                <td class="px-2 py-1 text-right mono" x-text="fmt(m.input_tokens)"></td>
+                <td class="px-2 py-1 text-right mono" x-text="fmt(m.output_tokens)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="text-xs text-slate-600 mt-10 text-center">
+      token-monitoring · Argo proxy on
+      <span class="mono">arecibo:<span x-text="location.port"></span></span>
+    </p>
+  </main>
+
+<script>
+function app() {
+  return {
+    // ---- state --------------------------------------------------------
+    tab: 'overview',
+    apiConnected: false,
+    currentUser: null,
+    needsLogin: false,
+    loginForm: { username: '', password: '' },
+    loginError: '',
+    loginBusy: false,
+
+    days: 30,
+    overview: {},
+    kpis: [],
+
+    reqFilters: { user_hash: '', model: '', since: '', until: '', limit: 100, offset: 0 },
+    requests: { rows: [], total: 0 },
+
+    selectedUser: null,
+    selectedUserLabel: '',
+    userDetail: {},
+
+    // ---- init ---------------------------------------------------------
+    async init() {
+      await this.checkAuth();
+      if (!this.needsLogin) await this.loadOverview();
+    },
+
+    async checkAuth() {
+      try {
+        const r = await fetch('/auth/whoami', { credentials: 'include' });
+        if (!r.ok) { this.apiConnected = true; this.needsLogin = true; return; }
+        const j = await r.json();
+        this.apiConnected = true;
+        if (j.authenticated) {
+          this.currentUser = j.display_name || j.username;
+          this.needsLogin = false;
+        } else {
+          this.currentUser = null;
+          // PAM may be disabled — try to fetch a real endpoint to decide.
+          const ping = await fetch('/api/overview?days=1', { credentials: 'include' });
+          if (ping.status === 401) { this.needsLogin = true; }
+          else {
+            this.currentUser = '(open)';
+            this.needsLogin = false;
+          }
+        }
+      } catch (e) {
+        this.apiConnected = false;
+      }
+    },
+
+    async doLogin() {
+      this.loginError = ''; this.loginBusy = true;
+      try {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(this.loginForm),
+        });
+        if (!r.ok) { this.loginError = 'Invalid credentials'; return; }
+        const j = await r.json();
+        this.currentUser = j.display_name || j.username;
+        this.needsLogin = false;
+        this.loginForm.password = '';
+        await this.loadOverview();
+      } catch (e) {
+        this.loginError = 'Network error';
+      } finally {
+        this.loginBusy = false;
+      }
+    },
+
+    async logout() {
+      try { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+      this.currentUser = null;
+      this.needsLogin = true;
+    },
+
+    // ---- data loaders -------------------------------------------------
+    async loadTab() {
+      if (this.tab === 'overview') return this.loadOverview();
+      if (this.tab === 'requests') return this.loadRequests(true);
+      if (this.tab === 'user' && this.selectedUser) return this.loadUser(this.selectedUser);
+    },
+
+    async loadOverview() {
+      try {
+        const r = await fetch(`/api/overview?days=${this.days}`, { credentials: 'include' });
+        if (r.status === 401) { this.needsLogin = true; return; }
+        this.overview = await r.json();
+        this.kpis = this.computeKpis();
+        this.$nextTick(() => this.renderCharts());
+      } catch (e) { this.apiConnected = false; }
+    },
+
+    async loadRequests(reset = false) {
+      if (reset) this.reqFilters.offset = 0;
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(this.reqFilters)) {
+        if (v !== '' && v !== null && v !== undefined) q.set(k, v);
+      }
+      try {
+        const r = await fetch(`/api/requests?${q}`, { credentials: 'include' });
+        if (r.status === 401) { this.needsLogin = true; return; }
+        this.requests = await r.json();
+      } catch (e) { this.apiConnected = false; }
+    },
+
+    async openUser(hash) {
+      this.selectedUser = hash;
+      this.selectedUserLabel = this.labelFor(hash);
+      this.tab = 'user';
+      await this.loadUser(hash);
+    },
+
+    async loadUser(hash) {
+      try {
+        const r = await fetch(`/api/users/${hash}?days=${this.days}`, { credentials: 'include' });
+        if (r.status === 401) { this.needsLogin = true; return; }
+        this.userDetail = await r.json();
+      } catch (e) { this.apiConnected = false; }
+    },
+
+    // ---- derived ------------------------------------------------------
+    labelFor(hash) {
+      if (!hash) return '';
+      const labels = this.overview.labels || this.requests.labels || {};
+      return labels[hash] || hash.slice(0, 8);
+    },
+
+    computeKpis() {
+      const cm = this.overview.current_month || {};
+      const total = (cm.input_tokens || 0) + (cm.output_tokens || 0);
+      const perDay = this.overview.tokens_per_day || [];
+      const today = perDay.length ? perDay[perDay.length - 1] : {};
+      const todayTotal = (today.input_tokens || 0) + (today.output_tokens || 0);
+      const users = new Set((this.overview.top_users || []).map(u => u.user_hash)).size;
+      const models = new Set((this.overview.top_models || []).map(m => m.model)).size;
+      return [
+        { label: 'month tokens', value: this.fmt(total), sub: `${cm.n || 0} requests` },
+        { label: 'today tokens', value: this.fmt(todayTotal), sub: `${today.n || 0} requests` },
+        { label: `active users (${this.days}d)`, value: users, sub: 'top 10 shown' },
+        { label: `models (${this.days}d)`, value: models, sub: 'top 10 shown' },
+      ];
+    },
+
+    monthEntries() {
+      const cm = this.overview.current_month || {};
+      return [
+        ['input tokens',  this.fmt(cm.input_tokens || 0)],
+        ['output tokens', this.fmt(cm.output_tokens || 0)],
+        ['cache read',    this.fmt(cm.cache_read_tokens || 0)],
+        ['cache create',  this.fmt(cm.cache_creation_tokens || 0)],
+        ['requests',      this.fmt(cm.n || 0)],
+        ['total tokens',  this.fmt((cm.input_tokens || 0) + (cm.output_tokens || 0))],
+      ];
+    },
+
+    userKpis() {
+      const t = (this.userDetail.totals || {});
+      return [
+        { label: 'requests', value: this.fmt(t.n || 0) },
+        { label: 'input',    value: this.fmt(t.input_tokens || 0) },
+        { label: 'output',   value: this.fmt(t.output_tokens || 0) },
+        { label: 'cache r/c', value: this.fmt((t.cache_read_tokens || 0) + (t.cache_creation_tokens || 0)) },
+      ];
+    },
+
+    // ---- formatting ---------------------------------------------------
+    fmt(n) {
+      if (n == null) return '—';
+      if (n < 1000) return String(n);
+      if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
+      return (n / 1_000_000).toFixed(2) + 'M';
+    },
+
+    cacheFmt(r, c) {
+      if (!r && !c) return '—';
+      return `${this.fmt(r || 0)}/${this.fmt(c || 0)}`;
+    },
+
+    shortTs(iso) {
+      if (!iso) return '';
+      return iso.replace('T', ' ').replace('Z', '').slice(0, 19);
+    },
+
+    // ---- charts -------------------------------------------------------
+    _charts: {},
+    renderCharts() {
+      const perDay = this.overview.tokens_per_day || [];
+      this._chart('chartDaily', {
+        type: 'line',
+        data: {
+          labels: perDay.map(d => d.day),
+          datasets: [
+            { label: 'input',  data: perDay.map(d => d.input_tokens),  borderColor: '#34d399', tension: 0.2 },
+            { label: 'output', data: perDay.map(d => d.output_tokens), borderColor: '#60a5fa', tension: 0.2 },
+          ],
+        },
+        options: chartOpts(),
+      });
+
+      const users = this.overview.top_users || [];
+      this._chart('chartUsers', {
+        type: 'bar',
+        data: {
+          labels: users.map(u => this.labelFor(u.user_hash)),
+          datasets: [
+            { label: 'input',  data: users.map(u => u.input_tokens),  backgroundColor: '#34d399' },
+            { label: 'output', data: users.map(u => u.output_tokens), backgroundColor: '#60a5fa' },
+          ],
+        },
+        options: { ...chartOpts(), indexAxis: 'y', scales: { x: { stacked: true, ticks: { color: '#94a3b8' } }, y: { stacked: true, ticks: { color: '#94a3b8' } } } },
+      });
+
+      const models = this.overview.top_models || [];
+      this._chart('chartModels', {
+        type: 'bar',
+        data: {
+          labels: models.map(m => m.model),
+          datasets: [
+            { label: 'input',  data: models.map(m => m.input_tokens),  backgroundColor: '#34d399' },
+            { label: 'output', data: models.map(m => m.output_tokens), backgroundColor: '#60a5fa' },
+          ],
+        },
+        options: { ...chartOpts(), scales: { x: { stacked: true, ticks: { color: '#94a3b8' } }, y: { stacked: true, ticks: { color: '#94a3b8' } } } },
+      });
+    },
+
+    _chart(id, cfg) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (this._charts[id]) this._charts[id].destroy();
+      this._charts[id] = new Chart(el, cfg);
+    },
+  };
+}
+
+function chartOpts() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } },
+      y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } },
+    },
+  };
+}
+</script>
+</body>
+</html>
